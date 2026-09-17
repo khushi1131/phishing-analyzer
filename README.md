@@ -2,7 +2,7 @@
 
 A single-file, client-side phishing email analyzer. Paste raw email source in, get a weighted risk score and a breakdown of every red flag out — no server, no API calls, no data ever leaves the browser.
 
-**[Live demo](https://claude.ai/artifact/MZv19RBcjokGTwAtnN8aC5D)**
+**[Live demo](https://phishing-analyzer-kappa.vercel.app/)**
 
 ---
 
