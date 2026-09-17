@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phishing Email Analyzer</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --panel: #11161f;
+    --panel-2: #161c27;
+    --border: #232b38;
+    --text: #d7dee8;
+    --text-dim: #7d8ba1;
+    --accent: #4cd9c0;
+    --warn: #f5a623;
+    --danger: #e5484d;
+    --safe: #4cd9c0;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #0a0e14; --panel:#11161f; --panel-2:#161c27; --border:#232b38; --text:#d7dee8; --text-dim:#7d8ba1;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 28px 20px 60px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: 1.4rem;
+    margin: 0;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  header h1 span { color: var(--accent); font-family: var(--mono); }
+  header p { margin: 0; color: var(--text-dim); font-size: 0.85rem; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 880px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 18px 20px;
+  }
+  .panel h2 {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin: 0 0 12px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 340px;
+    resize: vertical;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    padding: 12px;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+
+  button {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 10px 18px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #06110e; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-ghost { background: transparent; color: var(--text-dim); border-color: var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .sample-note { font-size: 0.75rem; color: var(--text-dim); margin-top: 8px; }
+  .sample-note a { color: var(--accent); cursor: pointer; text-decoration: none; }
+
+  /* results */
+  .empty-state {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    padding: 30px 4px;
+  }
+  .empty-state code { font-family: var(--mono); color: var(--text); background: var(--panel-2); padding: 1px 5px; border-radius: 3px; }
+
+  .score-block { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+  .dial {
+    position: relative;
+    width: 92px; height: 92px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .dial svg { position: absolute; top: 0; left: 0; transform: rotate(-90deg); }
+  .dial .num { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; z-index: 1; }
+  .verdict-title { font-size: 1.05rem; font-weight: 700; margin: 0 0 4px; }
+  .verdict-sub { font-size: 0.8rem; color: var(--text-dim); margin: 0; }
+
+  .finding {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: 4px;
+    background: var(--panel-2);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .finding.high { border-left-color: var(--danger); }
+  .finding.med { border-left-color: var(--warn); }
+  .finding.low { border-left-color: var(--text-dim); }
+  .finding .f-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.82rem; font-weight: 600;
+  }
+  .finding .f-tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    padding: 1px 7px;
+    border-radius: 3px;
+    color: #06110e;
+  }
+  .finding.high .f-tag { background: var(--danger); color: #1a0505; }
+  .finding.med .f-tag { background: var(--warn); color: #1a1205; }
+  .finding.low .f-tag { background: var(--text-dim); color: #06090d; }
+  .finding p { margin: 6px 0 0; font-size: 0.78rem; color: var(--text-dim); line-height: 1.5; }
+
+  .links-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.78rem; }
+  .links-table th { text-align: left; color: var(--text-dim); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .links-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); word-break: break-all; }
+  .links-table tr:last-child td { border-bottom: none; }
+  .pill { display: inline-block; font-family: var(--sans); font-size: 0.68rem; font-weight: 600; padding: 1px 7px; border-radius: 10px; }
+  .pill.risk { background: rgba(229,72,77,0.15); color: var(--danger); }
+  .pill.clean { background: rgba(76,217,192,0.12); color: var(--accent); }
+
+  .section-gap { margin-top: 20px; }
+
+  footer {
+    margin-top: 30px;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    line-height: 1.6;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Phish<span>Trace</span></h1>
+    <p>Client-side heuristic analysis of email headers &amp; body — nothing leaves your browser</p>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Raw email source</h2>
+      <textarea id="emailInput" placeholder="Paste the full email — headers (From, Reply-To, Received) and body — here.&#10;&#10;Tip: in Gmail use 'Show original', in Outlook use 'View message source'."></textarea>
+      <div class="row">
+        <button class="btn-primary" onclick="analyze()">Analyze email</button>
+        <button class="btn-ghost" onclick="loadSample()">Load a sample</button>
+        <button class="btn-ghost" onclick="clearAll()">Clear</button>
+      </div>
+      <p class="sample-note">All parsing happens locally in JavaScript. No network request is made with your pasted content.</p>
+    </div>
+
+    <div class="panel" id="resultsPanel">
+      <h2>Findings</h2>
+      <div id="results">
+        <div class="empty-state">
+          Paste an email on the left and click <code>Analyze email</code>.<br><br>
+          PhishTrace checks sender/reply-to mismatches, link-vs-display spoofing, IP-literal and punycode URLs, URL shorteners, urgency and credential-harvesting language, spoofed authentication headers, and risky attachment types — then gives a weighted risk score with a breakdown of every flag.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Heuristic tool for education and triage support — not a substitute for your organization's mail security gateway. A low score does not guarantee an email is safe; a high score does not guarantee it is malicious. When in doubt, report to your security team.
+  </footer>
+</div>
+
+<script>
+const SAMPLE = `From: "PayPal Security" <service@paypa1-alerts.com>
+Reply-To: security-verify@mail-recover-account.info
+To: you@example.com
+Subject: URGENT: Your account will be suspended in 24 hours
+Received: from unknown (HELO smtp.mailrelay-x9.ru) (185.220.101.7)
+Authentication-Results: mx.example.com; spf=fail smtp.mailfrom=paypa1-alerts.com; dkim=fail
+
+Dear Valued Customer,
+
+We detected unusual activity on your account. Your account will be suspended within 24 hours unless you verify your identity immediately.
+
+Click here to confirm your account: http://bit.ly/3xVerify-Now
+
+If you do not act now, your funds will be permanently frozen. Please provide your login and password to restore access.
+
+Attachment: invoice_statement.zip
+
+Sincerely,
+PayPal Account Team`;
+
+function loadSample() {
+  document.getElementById('emailInput').value = SAMPLE;
+}
+function clearAll() {
+  document.getElementById('emailInput').value = '';
+  document.getElementById('results').innerHTML = `<div class="empty-state">Paste an email on the left and click <code>Analyze email</code>.</div>`;
+}
+
+function extractHeader(text, name) {
+  const re = new RegExp('^' + name + ':\\s*(.+)$', 'im');
+  const m = text.match(re);
+  return m ? m[1].trim() : null;
+}
+
+function extractDomain(str) {
+  if (!str) return null;
+  const emailMatch = str.match(/[\w.+-]+@([\w.-]+)/);
+  if (emailMatch) return emailMatch[1].toLowerCase();
+  try {
+    const u = new URL(str.startsWith('http') ? str : 'http://' + str);
+    return u.hostname.toLowerCase();
+  } catch (e) { return null; }
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+  for (let i=0;i<=m;i++) dp[i][0]=i;
+  for (let j=0;j<=n;j++) dp[0][j]=j;
+  for (let i=1;i<=m;i++)
+    for (let j=1;j<=n;j++)
+      dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j-1],dp[i-1][j],dp[i][j-1]);
+  return dp[m][n];
+}
+
+const KNOWN_BRANDS = ['paypal','microsoft','apple','amazon','google','netflix','bankofamerica','wellsfargo','chase','facebook','instagram','linkedin','dhl','fedex','irs'];
+
+const URL_SHORTENERS = ['bit.ly','tinyurl.com','goo.gl','t.co','ow.ly','is.gd','buff.ly','rebrand.ly','cutt.ly'];
+
+const URGENCY_WORDS = ['urgent','immediately','suspend','suspended','24 hours','verify your account','act now','final notice','limited time','locked','unauthorized access','click here','confirm your identity','your account will be','failure to','restricted','permanently'];
+
+const CREDENTIAL_WORDS = ['password','login credentials','ssn','social security','credit card number','cvv','pin number','bank account number','wire transfer','confirm your password'];
+
+const RISKY_EXT = ['.exe','.scr','.js','.vbs','.zip','.rar','.jar','.bat','.cmd','.iso','.docm','.xlsm'];
+
+function analyze() {
+  const raw = document.getElementById('emailInput').value;
+  if (!raw.trim()) { return; }
+
+  const findings = []; // {severity: 'high'|'med'|'low', title, detail, points}
+  let score = 0;
+
+  const from = extractHeader(raw, 'From');
+  const replyTo = extractHeader(raw, 'Reply-To');
+  const received = extractHeader(raw, 'Received');
+  const authResults = extractHeader(raw, 'Authentication-Results');
+  const subject = extractHeader(raw, 'Subject') || '';
+  const bodyText = raw;
+
+  // 1. From / Reply-To mismatch
+  if (from && replyTo) {
+    const fromDomain = extractDomain(from);
+    const replyDomain = extractDomain(replyTo);
+    if (fromDomain && replyDomain && fromDomain !== replyDomain) {
+      findings.push({sev:'high', title:'Reply-To domain differs from From domain', detail:`From domain "${fromDomain}" does not match Reply-To domain "${replyDomain}". Replies would go somewhere other than the visible sender — a classic redirection trick.`, pts:25});
+      score += 25;
+    }
+  }
+
+  // 2. Brand impersonation via lookalike domain
+  if (from) {
+    const fromDomain = extractDomain(from) || '';
+    const domainCore = fromDomain.split('.')[0];
+    KNOWN_BRANDS.forEach(brand => {
+      if (domainCore !== brand && domainCore.length > 2) {
+        const dist = levenshtein(domainCore, brand);
+        if (dist > 0 && dist <= 2 && Math.abs(domainCore.length - brand.length) <= 2) {
+          findings.push({sev:'high', title:'Sender domain looks like a spoofed brand', detail:`"${fromDomain}" closely resembles "${brand}.com" (edit distance ${dist}) but is not the real domain — likely typosquatting.`, pts:30});
+          score += 30;
+        }
+      }
+    });
+  }
+
+  // 3. Authentication-Results: spf/dkim/dmarc fail
+  if (authResults) {
+    const failed = [];
+    if (/spf\s*=\s*fail/i.test(authResults)) failed.push('SPF');
+    if (/dkim\s*=\s*fail/i.test(authResults)) failed.push('DKIM');
+    if (/dmarc\s*=\s*fail/i.test(authResults)) failed.push('DMARC');
+    if (failed.length) {
+      findings.push({sev:'high', title:`${failed.join(' & ')} authentication failed`, detail:`The mail server reported failed ${failed.join(', ')} checks, meaning the sending server is not authorized to send mail for this domain.`, pts: 20 * failed.length});
+      score += 20 * failed.length;
+    }
+  } else if (/authentication-results/i.test(raw) === false) {
+    findings.push({sev:'low', title:'No Authentication-Results header found', detail:'Cannot verify SPF/DKIM/DMARC from the pasted content. This is common when only partial headers were copied — not itself a red flag.', pts:0});
+  }
+
+  // 4. Suspicious Received / relay
+  if (received && /\.(ru|cn|tk|xyz)\b/i.test(received)) {
+    findings.push({sev:'med', title:'Mail relay traces through an unusual TLD', detail:`The Received header references a mail server on a top-level domain (.ru/.cn/.tk/.xyz) commonly abused for spam relays. Not conclusive on its own, but worth noting.`, pts:10});
+    score += 10;
+  }
+
+  // 5. Urgency / pressure language
+  const lowerBody = bodyText.toLowerCase();
+  const foundUrgency = URGENCY_WORDS.filter(w => lowerBody.includes(w));
+  if (foundUrgency.length) {
+    const pts = Math.min(20, foundUrgency.length * 5);
+    findings.push({sev: foundUrgency.length>=3?'high':'med', title:'Urgency / pressure language detected', detail:`Phrases found: ${foundUrgency.slice(0,6).map(w=>`"${w}"`).join(', ')}. Manufactured urgency is used to short-circuit careful reading.`, pts});
+    score += pts;
+  }
+
+  // 6. Credential / financial harvesting language
+  const foundCred = CREDENTIAL_WORDS.filter(w => lowerBody.includes(w));
+  if (foundCred.length) {
+    findings.push({sev:'high', title:'Requests sensitive credentials or financial data', detail:`Mentions: ${foundCred.map(w=>`"${w}"`).join(', ')}. Legitimate services almost never ask you to submit these via email or an embedded link.`, pts:25});
+    score += 25;
+  }
+
+  // 7. Generic greeting
+  if (/dear (valued )?(customer|user|member|client)/i.test(bodyText) || /dear sir\/madam/i.test(bodyText)) {
+    findings.push({sev:'low', title:'Generic greeting instead of your name', detail:'Bulk phishing campaigns often can\'t personalize the greeting because the sender doesn\'t actually have your account details.', pts:8});
+    score += 8;
+  }
+
+  // 8. Links: extract and inspect
+  const linkRegex = /(https?:\/\/[^\s"'<>()]+)|(?:href=["']([^"']+)["'][^>]*>([^<]*))/gi;
+  const rawLinks = [...bodyText.matchAll(/https?:\/\/[^\s"'<>()]+/gi)].map(m => m[0]);
+  const uniqueLinks = [...new Set(rawLinks)];
+  const linkRows = [];
+
+  uniqueLinks.forEach(link => {
+    let domain;
+    try { domain = new URL(link).hostname.toLowerCase(); } catch(e) { domain = null; }
+    let risky = false;
+    let reasons = [];
+
+    if (domain && /^(\d{1,3}\.){3}\d{1,3}$/.test(domain)) {
+      risky = true; reasons.push('IP-literal URL');
+    }
+    if (domain && URL_SHORTENERS.includes(domain)) {
+      risky = true; reasons.push('URL shortener masks destination');
+    }
+    if (domain && domain.includes('xn--')) {
+      risky = true; reasons.push('Punycode — possible homograph attack');
+    }
+    if (domain && (domain.match(/\./g) || []).length >= 4) {
+      risky = true; reasons.push('Excessive subdomains');
+    }
+    KNOWN_BRANDS.forEach(brand => {
+      if (domain) {
+        const core = domain.split('.')[0];
+        const dist = levenshtein(core, brand);
+        if (core !== brand && dist > 0 && dist <= 2 && Math.abs(core.length-brand.length)<=2) {
+          risky = true; reasons.push(`Looks like "${brand}" (typosquat)`);
+        }
+      }
+    });
+
+    linkRows.push({link, domain: domain||'(unparsable)', risky, reasons});
+    if (risky) {
+      score += 12;
+    }
+  });
+
+  if (linkRows.some(r => r.risky)) {
+    const count = linkRows.filter(r=>r.risky).length;
+    findings.push({sev:'high', title:`${count} suspicious link${count>1?'s':''} found`, detail:'See the link table below for details on each flagged URL.', pts: count*12});
+  }
+
+  // 9. Risky attachment mention
+  const foundExt = RISKY_EXT.filter(ext => lowerBody.includes(ext));
+  if (foundExt.length) {
+    findings.push({sev:'med', title:'Risky attachment type referenced', detail:`Mentions attachment(s) with extension(s): ${foundExt.join(', ')}. These formats are commonly used to deliver malware.`, pts:15});
+    score += 15;
+  }
+
+  // 10. Subject line urgency
+  if (/urgent|action required|suspend|verify|winner|final notice/i.test(subject)) {
+    findings.push({sev:'low', title:'Subject line uses common phishing triggers', detail:`Subject: "${subject}"`, pts:5});
+    score += 5;
+  }
+
+  score = Math.min(100, score);
+
+  renderResults(score, findings, linkRows, {from, replyTo});
+}
+
+function renderResults(score, findings, linkRows, headers) {
+  let verdict, color;
+  if (score >= 60) { verdict = 'High risk — likely phishing'; color = 'var(--danger)'; }
+  else if (score >= 30) { verdict = 'Medium risk — proceed with caution'; color = 'var(--warn)'; }
+  else if (findings.length === 0) { verdict = 'No strong indicators found'; color = 'var(--safe)'; }
+  else { verdict = 'Low risk — minor flags only'; color = 'var(--safe)'; }
+
+  const circumference = 2 * Math.PI * 38;
+  const offset = circumference - (score/100) * circumference;
+
+  let html = `
+    <div class="score-block">
+      <div class="dial">
+        <svg width="92" height="92">
+          <circle cx="46" cy="46" r="38" stroke="#232b38" stroke-width="8" fill="none"/>
+          <circle cx="46" cy="46" r="38" stroke="${color}" stroke-width="8" fill="none"
+            stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
+        </svg>
+        <div class="num" style="color:${color}">${score}</div>
+      </div>
+      <div>
+        <p class="verdict-title" style="color:${color}">${verdict}</p>
+        <p class="verdict-sub">${findings.length} indicator${findings.length!==1?'s':''} checked positive · risk score out of 100</p>
+      </div>
+    </div>
+  `;
+
+  if (findings.length) {
+    html += `<div class="section-gap">`;
+    findings.sort((a,b) => (b.sev==='high')-(a.sev==='high'));
+    findings.forEach(f => {
+      html += `
+        <div class="finding ${f.sev}">
+          <div class="f-head"><span>${f.title}</span><span class="f-tag">+${f.pts}</span></div>
+          <p>${f.detail}</p>
+        </div>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<div class="empty-state" style="padding:10px 0;">No heuristic flags triggered on the fields PhishTrace checks. This does not guarantee the email is legitimate — always verify sender identity through a separate channel for anything requesting money or credentials.</div>`;
+  }
+
+  if (linkRows.length) {
+    html += `<div class="section-gap"><h2>Links found (${linkRows.length})</h2>
+      <table class="links-table"><thead><tr><th>Domain</th><th>URL</th><th>Status</th></tr></thead><tbody>`;
+    linkRows.forEach(r => {
+      html += `<tr>
+        <td>${r.domain}</td>
+        <td>${r.link.length > 60 ? r.link.slice(0,60)+'…' : r.link}</td>
+        <td>${r.risky ? `<span class="pill risk">flagged</span>` : `<span class="pill clean">no flag</span>`}</td>
+      </tr>`;
+      if (r.risky) {
+        html += `<tr><td colspan="3" style="font-family: var(--sans); color: var(--text-dim); font-size:0.72rem; padding-top:0;">↳ ${r.reasons.join(' · ')}</td></tr>`;
+      }
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  document.getElementById('results').innerHTML = html;
+}
+</script>
+</body>
+</html>
